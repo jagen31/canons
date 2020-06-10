@@ -1,7 +1,10 @@
-{-#LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE Arrows #-}
 
 module Main where
 import Euterpea hiding (a, b, c, d, e, f, g, transpose, invert)
+import HSoM
+import FRP.UISF.AuxFunctions (unique, SEvent)
 import Data.Function (on)
 import Data.List hiding (transpose)
 import Data.Maybe
@@ -110,9 +113,19 @@ crab m = m :=: (retro m)
 canon1 = times 2 $ crab (cantus 2)
 canon2 = invertD gMajor (pc B 0, 3) <$> cantus 3
 
+canons = [canon1, canon2]
+
+selectCanon :: SEvent Int -> BufferOperation MidiMessage
+selectCanon ap = if isJust ap 
+  then AppendToBuffer $ musicToMsgs' defParams ((pitch . toSemitones) <$> canons !! (fromJust ap)) 
+  else NoBOp
+
+ui0 :: UISF () ()
+ui0 = proc _ -> do
+  devid <- selectOutput -< ()
+  ap <- radio ["canon 1", "canon 2"] 0 >>> unique -< ()
+  midiOutB -< (devid, selectCanon ap)
+  returnA -< ()
+
 main :: IO ()
--- main =
-main = do { 
-  putStrLn $ show canon2;
-  play $ (pitch . toSemitones) <$> canon2;
-}
+main = runMUI' ui0
